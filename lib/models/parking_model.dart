@@ -8,8 +8,10 @@ class ParkingLot {
 
 
 
-  factory ParkingLot.fromMap(Map<String, dynamic> json){
-    final dest = LatLng(36.062070, -94.184470);
+  factory ParkingLot.fromMap(List<dynamic> json){
+    final lat = json[0]['lat'];
+    final lng = json[0]['lon'];
+    final dest = LatLng(lat, lng);
 
     return ParkingLot(
       latLng: dest,

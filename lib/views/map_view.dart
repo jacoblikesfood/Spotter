@@ -29,35 +29,15 @@ class _mapViewState extends State<mapView> {
     zoom: 11.5
   );
 
-  bool showDistance = false;
   final invalidLatLng = LatLng(0.0, 0.0);
-
+  bool isLoading = false;
+  String parkingTypeChoice = 'All';
   late GoogleMapController _googleMapController;
 
-  Directions? _info /*= Directions(
-    bounds: LatLngBounds(
-      southwest: LatLng(0.0, 0.0),
-      northeast: LatLng(0.0, 0.0),
-    ),
-    polylinePoints: List.empty(),
-    totalDistance: 'hi',
-    totalDuration: 'hello',
-  )*/;
+  Directions? _info;
 
-  Marker _origin = Marker(
-    markerId: const MarkerId('origin'),
-    infoWindow: const InfoWindow(title: 'Origin'),
-    icon:
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-    position: LatLng(0.0, 0.0),
-  );
-  Marker _destination = Marker(
-      markerId: const MarkerId('destination'),
-      infoWindow: const InfoWindow(title: 'Destination'),
-      icon:
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      position: LatLng(0.0, 0.0),
-  );
+  Marker? _origin;
+  Marker? _destination;
 
 
   @override
@@ -73,7 +53,7 @@ class _mapViewState extends State<mapView> {
   }
 
   void _addMarker(LatLng pos) async {
-    if (_origin.position == invalidLatLng || (_origin.position != invalidLatLng && _destination.position != invalidLatLng)) {
+    if (_origin == null || (_origin != null && _destination != null)) {
       setState(() {
         _origin = Marker(
           markerId: const MarkerId('origin'),
@@ -90,8 +70,6 @@ class _mapViewState extends State<mapView> {
           position: invalidLatLng,
         );
 
-        showDistance = false;
-
         ///reset info
         _info = null as Directions;
       });
@@ -104,12 +82,11 @@ class _mapViewState extends State<mapView> {
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           position: pos,
         );
-        showDistance = true;
       });
 
       ///get directions
       final directions = await DirectionsRepository()
-          .getDirections(origin: _origin.position, destination: pos);
+          .getDirections(origin: _origin!.position, destination: pos);
       setState(() => _info = directions);
     }
   }
@@ -125,6 +102,8 @@ class _mapViewState extends State<mapView> {
         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         position: pos,
       );
+      _info = null;
+      isLoading = true;
     });
 
     final parkingLot = await ParkingRepository()
@@ -133,7 +112,22 @@ class _mapViewState extends State<mapView> {
     final directions = await DirectionsRepository()
         .getDirections(origin: pos, destination: parkingLot.latLng);
 
-    setState(() => _info = directions);
+    setState(() {
+      _destination = Marker(
+        markerId: const MarkerId('destination'),
+        infoWindow: const InfoWindow(title: 'Destination'),
+        icon:
+        BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        position: parkingLot.latLng,
+      );
+      _info = directions;
+      isLoading = false;
+      _googleMapController.animateCamera(
+        _info != null
+            ? CameraUpdate.newLatLngBounds(_info!.bounds, 100.0)
+            : CameraUpdate.newCameraPosition(_initialCameraPosition),
+      );
+    });
   }
 
 
@@ -146,12 +140,35 @@ class _mapViewState extends State<mapView> {
         centerTitle: false,
         title: const Text('Spotter'),
         actions: [
-          if (_origin.position != invalidLatLng)
+          DropdownButton<String>(
+            value: parkingTypeChoice,
+            icon: const Icon(Icons.arrow_downward),
+            iconSize: 24,
+            elevation: 16,
+            style: const TextStyle(color: Colors.black),
+            underline: Container(
+              height: 2,
+              color: Colors.black12,
+            ),
+            onChanged: (String? newValue) {
+              setState(() {
+                parkingTypeChoice = newValue!;
+              });
+            },
+            items: <String>['All', 'Free', 'Metered', 'Paid', 'Street']
+                .map<DropdownMenuItem<String>>((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+          ),
+          if (_origin != null)
             TextButton(
               onPressed: () => _googleMapController.animateCamera(
                 CameraUpdate.newCameraPosition(
                   CameraPosition(
-                    target: _origin.position,
+                    target: _origin!.position,
                     zoom: 14.5,
                     tilt: 50.0,
                   ),
@@ -163,12 +180,12 @@ class _mapViewState extends State<mapView> {
               ),
               child: const Text('ORIGIN'),
             ),
-          if (_destination.position != invalidLatLng)
+          if (_destination != null)
             TextButton(
               onPressed: () => _googleMapController.animateCamera(
                 CameraUpdate.newCameraPosition(
                   CameraPosition(
-                    target: _destination.position,
+                    target: _destination!.position,
                     zoom: 14.5,
                     tilt: 50.0,
                   ),
@@ -189,12 +206,12 @@ class _mapViewState extends State<mapView> {
         children: [
             GoogleMap(
             myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
+            zoomControlsEnabled: true,
             initialCameraPosition: _initialCameraPosition,
             onMapCreated: _onMapCreated,
             markers: {
-              if (_origin.position != invalidLatLng) _origin,
-              if (_destination.position != invalidLatLng) _destination
+              if (_origin != null) _origin!,
+              if (_destination != null) _destination!
             },
             polylines: {
               if (_info != null)
@@ -229,7 +246,36 @@ class _mapViewState extends State<mapView> {
                   ],
                 ),
                 child: Text(
-                  '${_info!.totalDistance}, ${_info!.totalDuration}',   ///    ${_info.totalDistance}, ${_info.totalDuration}
+                  '${_info!.totalDistance}, ${_info!.totalDuration}',
+                  style: const TextStyle(
+                    fontSize: 18.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
+          if (isLoading)
+            Positioned(
+              top: 20.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6.0,
+                  horizontal: 12.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(20.0),
+                  boxShadow: const[
+                    BoxShadow(
+                      color: Colors.black26,
+                      offset: Offset(0, 2),
+                      blurRadius: 6.0,
+                    )
+                  ],
+                ),
+                child: Text(
+                  'Loading...',
                   style: const TextStyle(
                     fontSize: 18.0,
                     fontWeight: FontWeight.w600,
@@ -249,6 +295,7 @@ class _mapViewState extends State<mapView> {
           ),
         child: const Icon(Icons.center_focus_strong),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

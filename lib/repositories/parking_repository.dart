@@ -18,11 +18,11 @@ class ParkingRepository {
     required LatLng location,
   }) async {
     final response = await _dio.get(
-      _baseUrl,
-      queryParameters: {
-        'lat': '${location.latitude}',
-        'lon': '${location.longitude}',
-      },
+      _baseUrl + 'locations/' + '${location.latitude}' + '/' + '${location.longitude}',
+//      queryParameters: {
+ //       'lat': '${location.latitude}',
+ //       'lon': '${location.longitude}',
+  //    },
     );
 
 

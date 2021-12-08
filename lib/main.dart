@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primaryColor: Colors.white,
       ),
-      initialRoute: '/welcome',
+      initialRoute: '/mapview',
       routes: {
         '/welcome': (context) => WelcomeView(),
         '/mapview': (context) => mapView()
