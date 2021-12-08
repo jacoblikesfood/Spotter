@@ -43,13 +43,7 @@ class ParkingLotList {
   factory ParkingLotList.fromMap(Map<String, dynamic> json){
 
     final count = json['locations'].length;
-    print(count);
-    print(json);
     List<ParkingLot> list = List<ParkingLot>.generate(count, (i) => ParkingLot.fromMap(json['locations'][i]));
-
-/*    for (int i = 0; i < count; i++){
-      list.add(ParkingLot.fromMap(json[1]));
-    }*/
 
     return ParkingLotList(
       parkingLotList: list,
