@@ -31,7 +31,7 @@ class _mapViewState extends State<mapView> {
     zoom: 11.5
   );
 
-  int lotIterator = 0;
+  int? lotIterator;
   bool isLoading = false;
   String parkingTypeChoice = 'All';
   late GoogleMapController _googleMapController;
@@ -41,6 +41,8 @@ class _mapViewState extends State<mapView> {
   Position? currentPosition;
 
   ParkingLotList? parkingLotList;
+
+  Duration? eta;
 
   Marker? _origin;
   Marker? _destination;
@@ -88,6 +90,7 @@ class _mapViewState extends State<mapView> {
       _destination = null;
       _info = null;
       isLoading = true;
+      lotIterator = 0;
     });
 
     //dynamic parkingLotList;
@@ -109,8 +112,10 @@ class _mapViewState extends State<mapView> {
           .getParkingLotWithType(location: pos, type: 4);
     }
 
+    //eta = DateTime.now().difference((DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator].reportedFull)).add(Duration(hours: 26)));        //DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator].reportedFull).difference(DateTime.now());
+
     final directions = await DirectionsRepository()
-        .getDirections(origin: pos, destination: parkingLotList!.parkingLotList[lotIterator].latLng);
+        .getDirections(origin: pos, destination: parkingLotList!.parkingLotList[lotIterator!].latLng);
 
     setState(() {
       _destination = Marker(
@@ -118,10 +123,13 @@ class _mapViewState extends State<mapView> {
         infoWindow: const InfoWindow(title: 'Destination'),
         icon:
         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        position: parkingLotList!.parkingLotList[lotIterator].latLng,
+        position: parkingLotList!.parkingLotList[lotIterator!].latLng,
       );
       _info = directions;
       isLoading = false;
+      eta = DateTime.now().difference((DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator!].reportedFull)).add(Duration(hours: 26)));
+      print('Lot iterator = ${lotIterator}');
+      print(eta);
       _googleMapController.animateCamera(
         _info != null
             ? CameraUpdate.newLatLngBounds(_info!.bounds, 100.0)
@@ -131,15 +139,15 @@ class _mapViewState extends State<mapView> {
   }
 
   void reportFull() async {
-   ParkingRepository().postParkingLotFull(id: lotIterator);
-   if (lotIterator < parkingLotList!.count) {
+   ParkingRepository().postParkingLotFull(id: lotIterator!);
+   if ((lotIterator)! < parkingLotList!.count) {
      setState(() {
        isLoading = true;
      });
-     lotIterator++;
+     lotIterator = (lotIterator)! + 1;
      final directions = await DirectionsRepository()
          .getDirections(origin: _origin!.position,
-         destination: parkingLotList!.parkingLotList[lotIterator].latLng);
+         destination: parkingLotList!.parkingLotList[lotIterator!].latLng);
 
      setState(() {
        _destination = Marker(
@@ -147,7 +155,7 @@ class _mapViewState extends State<mapView> {
          infoWindow: const InfoWindow(title: 'Destination'),
          icon:
          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-         position: parkingLotList!.parkingLotList[lotIterator].latLng,
+         position: parkingLotList!.parkingLotList[lotIterator!].latLng,
        );
        _info = directions;
        isLoading = false;
@@ -162,24 +170,26 @@ class _mapViewState extends State<mapView> {
 
   void nextLot() async {
 
-    print(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse('Tue, 30 Nov 2021 12:30:00 GMT'));
+    //print(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse('Tue, 30 Nov 2021 12:30:00 GMT'));
 
-    if (lotIterator < parkingLotList!.count) {
+    if ((lotIterator)! < parkingLotList!.count) {
       setState(() {
         isLoading = true;
+        lotIterator = (lotIterator)! + 1;
       });
-      lotIterator++;
+     // lotIterator++;
       final directions = await DirectionsRepository()
           .getDirections(origin: _origin!.position,
-          destination: parkingLotList!.parkingLotList[lotIterator].latLng);
+          destination: parkingLotList!.parkingLotList[lotIterator!].latLng);
 
       setState(() {
+        eta = DateTime.now().difference((DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator!].reportedFull)).add(Duration(hours: 26)));
         _destination = Marker(
           markerId: const MarkerId('destination'),
           infoWindow: const InfoWindow(title: 'Destination'),
           icon:
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          position: parkingLotList!.parkingLotList[lotIterator].latLng,
+          position: parkingLotList!.parkingLotList[lotIterator!].latLng,
         );
         _info = directions;
         isLoading = false;
@@ -189,6 +199,20 @@ class _mapViewState extends State<mapView> {
               : CameraUpdate.newCameraPosition(_initialCameraPosition),
         );
       });
+    }
+  }
+
+  String _printDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+
+    if (int.parse(twoDigits(duration.inHours)) <= 24) {
+      return '${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds hours';
+    } else if ((int.parse(twoDigits(duration.inHours)) >= 24) && (int.parse(twoDigits(duration.inHours)) <= 48)) {
+      return 'over a day';
+    } else {
+      return 'over 2 days';
     }
   }
 
@@ -328,7 +352,7 @@ class _mapViewState extends State<mapView> {
                   ],
                 ),
                 child: Text(
-                  'Destination: ${parkingLotList!.parkingLotList[lotIterator].name}\nReported full: ' + '${DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('MM/dd/yyyy HH:mm').parse(DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator].reportedFull))).subtract(Duration(hours: 6)))}',
+                  'Destination: ${parkingLotList!.parkingLotList[lotIterator!].name}\nReported full ' + '${_printDuration(eta!)}' + " ago",      //'${DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('MM/dd/yyyy HH:mm').parse(DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator].reportedFull))).subtract(Duration(hours: 6)))}',
                   style: const TextStyle(
                     fontSize: 18.0,
                     fontWeight: FontWeight.w600,
