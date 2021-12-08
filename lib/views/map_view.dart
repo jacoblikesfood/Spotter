@@ -5,6 +5,8 @@ import 'package:spotter/models/directions_model.dart';
 import 'package:spotter/repositories/directions_repository.dart';
 import 'package:spotter/models/parking_model.dart';
 import 'package:spotter/repositories/parking_repository.dart';
+import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 class MapView extends StatelessWidget {
@@ -29,15 +31,21 @@ class _mapViewState extends State<mapView> {
     zoom: 11.5
   );
 
-  final invalidLatLng = LatLng(0.0, 0.0);
+  int lotIterator = 0;
   bool isLoading = false;
   String parkingTypeChoice = 'All';
   late GoogleMapController _googleMapController;
 
   Directions? _info;
 
+  Position? currentPosition;
+
+  ParkingLotList? parkingLotList;
+
   Marker? _origin;
   Marker? _destination;
+
+  final Geolocator geolocator = Geolocator()..forceAndroidLocationManager;
 
 
   @override
@@ -52,45 +60,18 @@ class _mapViewState extends State<mapView> {
     _googleMapController = controller;
   }
 
-  void _addMarker(LatLng pos) async {
-    if (_origin == null || (_origin != null && _destination != null)) {
+  _getCurrentLocation() {
+    geolocator
+        .getCurrentPosition(desiredAccuracy: LocationAccuracy.best)
+        .then((Position position) {
       setState(() {
-        _origin = Marker(
-          markerId: const MarkerId('origin'),
-          infoWindow: const InfoWindow(title: 'Origin'),
-          icon:
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          position: pos,
-        );
-        _destination = Marker(
-          markerId: const MarkerId('destination'),
-          infoWindow: const InfoWindow(title: 'Destination'),
-          icon:
-          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          position: invalidLatLng,
-        );
-
-        ///reset info
-        _info = null as Directions;
+        currentPosition = position;
       });
-    } else {
-      setState(() {
-        _destination = Marker(
-          markerId: const MarkerId('destination'),
-          infoWindow: const InfoWindow(title: 'Destination'),
-          icon:
-          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          position: pos,
-        );
-      });
-
-      ///get directions
-      final directions = await DirectionsRepository()
-          .getDirections(origin: _origin!.position, destination: pos);
-      setState(() => _info = directions);
-    }
+      _findLot(LatLng(position.latitude, position.longitude));
+    }).catchError((e) {
+      print(e);
+    });
   }
-
 
   ///parking lot api call
   void _findLot(LatLng pos) async {
@@ -102,15 +83,32 @@ class _mapViewState extends State<mapView> {
         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         position: pos,
       );
+      _destination = null;
       _info = null;
       isLoading = true;
     });
 
-    final parkingLot = await ParkingRepository()
-        .getParkingLot(location: pos);
+    //dynamic parkingLotList;
+
+    if(parkingTypeChoice == 'All'){
+      parkingLotList = await ParkingRepository()
+          .getParkingLot(location: pos);
+    } else if (parkingTypeChoice == 'Free'){
+      parkingLotList = await ParkingRepository()
+          .getParkingLotWithType(location: pos, type: 1);
+    } else if (parkingTypeChoice == 'Metered'){
+      parkingLotList = await ParkingRepository()
+          .getParkingLotWithType(location: pos, type: 2);
+    } else if (parkingTypeChoice == 'Paid'){
+      parkingLotList = await ParkingRepository()
+          .getParkingLotWithType(location: pos, type: 3);
+    } else if (parkingTypeChoice == 'Street'){
+      parkingLotList = await ParkingRepository()
+          .getParkingLotWithType(location: pos, type: 4);
+    }
 
     final directions = await DirectionsRepository()
-        .getDirections(origin: pos, destination: parkingLot.latLng);
+        .getDirections(origin: pos, destination: parkingLotList!.parkingLotList[lotIterator].latLng);
 
     setState(() {
       _destination = Marker(
@@ -118,7 +116,7 @@ class _mapViewState extends State<mapView> {
         infoWindow: const InfoWindow(title: 'Destination'),
         icon:
         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        position: parkingLot.latLng,
+        position: parkingLotList!.parkingLotList[lotIterator].latLng,
       );
       _info = directions;
       isLoading = false;
@@ -130,6 +128,67 @@ class _mapViewState extends State<mapView> {
     });
   }
 
+  void reportFull() async {
+   ParkingRepository().postParkingLotFull(id: lotIterator);
+   if (lotIterator < parkingLotList!.count) {
+     setState(() {
+       isLoading = true;
+     });
+     lotIterator++;
+     final directions = await DirectionsRepository()
+         .getDirections(origin: _origin!.position,
+         destination: parkingLotList!.parkingLotList[lotIterator].latLng);
+
+     setState(() {
+       _destination = Marker(
+         markerId: const MarkerId('destination'),
+         infoWindow: const InfoWindow(title: 'Destination'),
+         icon:
+         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+         position: parkingLotList!.parkingLotList[lotIterator].latLng,
+       );
+       _info = directions;
+       isLoading = false;
+       _googleMapController.animateCamera(
+         _info != null
+             ? CameraUpdate.newLatLngBounds(_info!.bounds, 100.0)
+             : CameraUpdate.newCameraPosition(_initialCameraPosition),
+       );
+     });
+   }
+  }
+
+  void nextLot() async {
+
+    print(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse('Tue, 30 Nov 2021 12:30:00 GMT'));
+
+    if (lotIterator < parkingLotList!.count) {
+      setState(() {
+        isLoading = true;
+      });
+      lotIterator++;
+      final directions = await DirectionsRepository()
+          .getDirections(origin: _origin!.position,
+          destination: parkingLotList!.parkingLotList[lotIterator].latLng);
+
+      setState(() {
+        _destination = Marker(
+          markerId: const MarkerId('destination'),
+          infoWindow: const InfoWindow(title: 'Destination'),
+          icon:
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          position: parkingLotList!.parkingLotList[lotIterator].latLng,
+        );
+        _info = directions;
+        isLoading = false;
+        _googleMapController.animateCamera(
+          _info != null
+              ? CameraUpdate.newLatLngBounds(_info!.bounds, 100.0)
+              : CameraUpdate.newCameraPosition(_initialCameraPosition),
+        );
+      });
+    }
+  }
 
   ///build
   @override
@@ -163,39 +222,23 @@ class _mapViewState extends State<mapView> {
               );
             }).toList(),
           ),
-          if (_origin != null)
+          if (_destination != null)
             TextButton(
-              onPressed: () => _googleMapController.animateCamera(
-                CameraUpdate.newCameraPosition(
-                  CameraPosition(
-                    target: _origin!.position,
-                    zoom: 14.5,
-                    tilt: 50.0,
-                  ),
-                ),
-              ),
+              onPressed: reportFull,
               style: TextButton.styleFrom(
-                primary: Colors.green,
+                primary: Colors.red,
                 textStyle: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              child: const Text('ORIGIN'),
+              child: const Text('FULL'),
             ),
           if (_destination != null)
             TextButton(
-              onPressed: () => _googleMapController.animateCamera(
-                CameraUpdate.newCameraPosition(
-                  CameraPosition(
-                    target: _destination!.position,
-                    zoom: 14.5,
-                    tilt: 50.0,
-                  ),
-                ),
-              ),
+              onPressed: nextLot,
               style: TextButton.styleFrom(
                 primary: Colors.blue,
                 textStyle: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              child: const Text('DEST'),
+              child: const Text('NEXT'),
             ),
         ],
         backgroundColor: Colors.white,
@@ -226,16 +269,16 @@ class _mapViewState extends State<mapView> {
             },
             onLongPress: _findLot,
           ),
-          if (_info != null)
+          if (_info != null && !isLoading)
             Positioned(
-              top: 20.0,
+              top: 60.0,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 6.0,
                   horizontal: 12.0,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.yellowAccent,
+                  color: Colors.yellowAccent.withOpacity(0.75),
                   borderRadius: BorderRadius.circular(20.0),
                   boxShadow: const[
                     BoxShadow(
@@ -247,6 +290,35 @@ class _mapViewState extends State<mapView> {
                 ),
                 child: Text(
                   '${_info!.totalDistance}, ${_info!.totalDuration}',
+                  style: const TextStyle(
+                    fontSize: 18.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
+          if (_info != null && !isLoading)
+            Positioned(
+              top: 5.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6.0,
+                  horizontal: 12.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.yellowAccent.withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(20.0),
+                  boxShadow: const[
+                    BoxShadow(
+                      color: Colors.black26,
+                      offset: Offset(0, 2),
+                      blurRadius: 6.0,
+                    )
+                  ],
+                ),
+                child: Text(
+                  'Destination: ${parkingLotList!.parkingLotList[lotIterator].name}\nReported full: ' + '${DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('MM/dd/yyyy HH:mm').parse(DateFormat('MM/dd/yyyy HH:mm').format(DateFormat('EEE, dd MMM yyy hh:mm:ss').parse(parkingLotList!.parkingLotList[lotIterator].reportedFull))).subtract(Duration(hours: 6)))}',
                   style: const TextStyle(
                     fontSize: 18.0,
                     fontWeight: FontWeight.w600,
@@ -274,15 +346,18 @@ class _mapViewState extends State<mapView> {
                     )
                   ],
                 ),
-                child: Text(
+                child: const Text(
                   'Loading...',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18.0,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
+          if (_info == null && !isLoading)
+          ElevatedButton(onPressed: _getCurrentLocation, child: Text('Find Parking'))
+
         ],
       ),
       floatingActionButton: FloatingActionButton(

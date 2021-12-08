@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:spotter/views/welcome_view.dart';
 import 'package:spotter/views/map_view.dart';
 
 void main() {
@@ -20,7 +19,6 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/mapview',
       routes: {
-        '/welcome': (context) => WelcomeView(),
         '/mapview': (context) => mapView()
       }
     );

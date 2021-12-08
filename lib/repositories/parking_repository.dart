@@ -14,22 +14,32 @@ class ParkingRepository {
 
   ParkingRepository({Dio? dio}) : _dio = dio ?? Dio();
 
-  Future<ParkingLot> getParkingLot({
+  Future <ParkingLotList> getParkingLot({
     required LatLng location,
   }) async {
     final response = await _dio.get(
       _baseUrl + 'locations/' + '${location.latitude}' + '/' + '${location.longitude}',
-//      queryParameters: {
- //       'lat': '${location.latitude}',
- //       'lon': '${location.longitude}',
-  //    },
     );
 
-
-    print(response);
-
-
-    return ParkingLot.fromMap(response.data);
+    return ParkingLotList.fromMap(response.data);
   }
 
+  Future <ParkingLotList> getParkingLotWithType({
+    required LatLng location,
+    required int type,
+  }) async {
+    final response = await _dio.get(
+      _baseUrl + 'locations/type/' + '${type}' + '/' + '${location.latitude}' + '/' + '${location.longitude}'
+    );
+
+    return ParkingLotList.fromMap(response.data);
+  }
+
+  void postParkingLotFull({
+    required int id,
+  }) async {
+    final response = await _dio.post(
+      _baseUrl + '/locations/report/' + '${id}'
+    );
+  }
 }
