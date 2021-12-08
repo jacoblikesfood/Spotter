@@ -60,6 +60,8 @@ class _mapViewState extends State<mapView> {
     _googleMapController = controller;
   }
 
+
+  ///gets user location, drops marker, and finds route to closest lot
   _getCurrentLocation() {
     geolocator
         .getCurrentPosition(desiredAccuracy: LocationAccuracy.best)
@@ -199,6 +201,14 @@ class _mapViewState extends State<mapView> {
         centerTitle: false,
         title: const Text('Spotter'),
         actions: [
+          TextButton(
+            onPressed: _getCurrentLocation,
+            style: TextButton.styleFrom(
+              primary: Colors.green,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            child: const Text('NEAR ME'),
+          ),
           DropdownButton<String>(
             value: parkingTypeChoice,
             icon: const Icon(Icons.arrow_downward),
@@ -355,8 +365,8 @@ class _mapViewState extends State<mapView> {
                 ),
               ),
             ),
-          if (_info == null && !isLoading)
-          ElevatedButton(onPressed: _getCurrentLocation, child: Text('Find Parking'))
+         // if (_info == null && !isLoading)
+          //ElevatedButton(onPressed: _getCurrentLocation, child: Text('Find Parking'))
 
         ],
       ),
